@@ -6,7 +6,7 @@ namespace AIPromptManagementSystem.DTOs
     {
         public string PromptId { get; set; }
         public string UserName { get; set; }
-        public PromptRatingEnum Rating { get; set; } = PromptRatingEnum.Погано;
+        public PromptRatingEnum Rating { get; set; } 
         public string Comment { get; set; } = string.Empty;
     }
 }

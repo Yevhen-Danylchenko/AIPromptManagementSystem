@@ -38,10 +38,27 @@ namespace AIPromptManagementSystem.Services
         /// <remarks>Enumerates the table via QueryAsync and materializes all results into memory; this
         /// may incur high memory usage for large result sets.</remarks>
         /// <returns>A Task whose result is a List of PromptUsageHistory containing all retrieved entities.</returns>
-        public async Task<List<PromptUsageHistory>> GetAllPromptAsync()
+        public async Task<List<PromptUsageHistory>> GetAllPromptsAsync()
         {
             var prompts = new List<PromptUsageHistory>();
             await foreach (var prompt in _tableClient.QueryAsync<PromptUsageHistory>())
+            {
+                prompts.Add(prompt);
+            }
+            return prompts.ToList();
+        }
+
+        /// <summary>
+        /// Asynchronously retrieves PromptUsageHistory entities that 
+        /// match the specified promptId from the underlying
+        /// </summary>
+        /// <param name="promptId"></param>
+        /// <returns></returns>
+        public async Task<List<PromptUsageHistory>> GetPromptByIdAsync(string promptId)
+        {
+            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(p => p.PromptId == promptId);
+            var prompts = new List<PromptUsageHistory>();
+            await foreach (var prompt in _tableClient.QueryAsync<PromptUsageHistory>(filter))
             {
                 prompts.Add(prompt);
             }
@@ -77,15 +94,13 @@ namespace AIPromptManagementSystem.Services
         }
 
         /// <summary>
-        /// Adds a new prompt version record to table storage for an existing prompt asynchronously.
+        /// Adds a new version of an existing prompt to table 
+        /// storage asynchronously based on the provided CreatePromptVersionDto.  
         /// </summary>
-        /// <remarks>Generates a new PromptUsageHistory entity with a unique RowKey, sets PartitionKey to
-        /// 'PromptVersionHistory', populates metadata (PromptTitle, Description, UserName, UsedAt), and persists the
-        /// entity to the table.</remarks>
-        /// <param name="obj">CreatePromptVersionDto containing PromptId, CreatedBy, and ChangeNote used to create the new version.</param>
-        /// <returns>A Task that represents the asynchronous operation.</returns>
-        /// <exception cref="InvalidOperationException">Thrown if no base prompt entity exists with the specified PromptId.</exception>
-        public async Task AddNewVersionPromptAsync(CreatePromptVersionDto obj)
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        public async Task<PromptUsageHistory> AddNewVersionPromptAsync(CreatePromptVersionDto obj)
         {
             // Перевіряємо, чи існує базовий промпт (щоб не створювати версію для неіснуючого)
             var existingEntity = await _tableClient.GetEntityAsync<PromptUsageHistory>("PromptBase", obj.PromptId);
@@ -94,6 +109,28 @@ namespace AIPromptManagementSystem.Services
             {
                 throw new InvalidOperationException($"No base entity found with PromptId: {obj.PromptId}");
             }
+
+            // Витягуємо всі версії для цього PromptId
+            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(p => p.PartitionKey == "PromptVersionHistory" && p.PromptId == obj.PromptId);
+
+            int maxVersion = 0;
+            var ratings = new List<int>();
+
+            await foreach (var entity in _tableClient.QueryAsync<PromptUsageHistory>(filter))
+            {
+                if (entity.Version > maxVersion)
+                {
+                    maxVersion = entity.Version;
+                }
+
+                if (entity.Rating > 0)
+                {
+                    ratings.Add((int)entity.Rating);
+                }
+                    
+            }
+
+            double averageRating = ratings.Count > 0 ? ratings.Average() : 0.0;
 
             // Створюємо нову версію з новим RowKey
             var newPromptVersion = new PromptUsageHistory
@@ -104,24 +141,26 @@ namespace AIPromptManagementSystem.Services
                 PromptTitle = $"Version of {obj.PromptId}, created by {obj.CreatedBy}",
                 Description = obj.ChangeNote,
                 UserName = obj.CreatedBy,
-                UsedAt = DateTime.UtcNow
+                UsedAt = DateTime.UtcNow,
+                Version = maxVersion + 1,
+                AverageRating = averageRating
             };
 
             // Додаємо новий запис у таблицю
             await _tableClient.AddEntityAsync(newPromptVersion);
+            return newPromptVersion;
         }
 
 
         /// <summary>
-        /// Adds a new rating for the specified prompt to table storage asynchronously.
+        /// Adds a new rating for a specific prompt to table 
+        /// storage asynchronously based on the provided PromptRating and  
         /// </summary>
-        /// <remarks>Creates a PromptUsageHistory entry with PartitionKey 'PromptRatings', a new GUID
-        /// RowKey, and UsedAt set to UTC now; requires an existing base entity under partition 'PromptBase'.</remarks>
-        /// <param name="promptId">Identifier of the base prompt to which the rating applies.</param>
-        /// <param name="obj">PromptRating containing the user name, rating value, and optional comment to add.</param>
-        /// <returns>A task that represents the asynchronous operation.</returns>
-        /// <exception cref="InvalidOperationException">Thrown when no base entity exists with the specified promptId.</exception>
-        public async Task AddRatingAsync(string promptId, PromptRating obj)
+        /// <param name="promptId"></param>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        public async Task<PromptUsageHistory> AddRatingAsync(string promptId, PromptRating obj)
         {
             // Перевіряємо, чи існує базовий промпт
             var ratingEntity = await _tableClient.GetEntityAsync<PromptUsageHistory>("PromptBase", promptId);
@@ -145,27 +184,30 @@ namespace AIPromptManagementSystem.Services
 
             // Додаємо новий запис у таблицю
             await _tableClient.AddEntityAsync(promptRating);
+            return promptRating;
         }
 
 
         /// <summary>
-        /// Asynchronously retrieves usage history for the specified prompt from the configured table storage.
+        /// Retrieves the usage history of a specific prompt by its 
+        /// unique identifier (promptId) from table storage asynchronously.
         /// </summary>
-        /// <remarks>Performs an asynchronous query using the configured TableClient and returns an empty
-        /// list if no entries are found.</remarks>
-        /// <param name="promptId">The identifier of the prompt to retrieve usage history for.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains a list of PromptUsageHistory
-        /// entries for the specified prompt.</returns>
-        public async Task<List<PromptUsageHistory>> GetPromptUsageHistoryAsync(string promptId)
+        /// <returns></returns>
+        public async Task<List<PromptUsageHistory>> GetPromptHistoryAsync()
         {
-            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(p => p.PromptId == promptId);
-            var usageHistory = new List<PromptUsageHistory>();
+            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(
+                p => p.PartitionKey == "PromptVersionHistory");
+
+            var result = new List<PromptUsageHistory>();
+
             await foreach (var entity in _tableClient.QueryAsync<PromptUsageHistory>(filter))
             {
-                usageHistory.Add(entity);
+                result.Add(entity);
             }
-            return usageHistory;
+
+            return result.OrderByDescending(h => h.UsedAt).ToList();
         }
+
 
         /// <summary>
         /// Retrieves details for the specified prompt, including the most recent usage record and the average of
