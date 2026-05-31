@@ -15,8 +15,8 @@ namespace AIPromptManagementSystem.Services
         /// <exception cref="InvalidOperationException"></exception>
         public AzureTableService(IConfiguration configuration)
         {
-            var connectionString = configuration.GetConnectionString("AzureTableStorage");
-            var tableName = configuration["AzureTableStorage:TableName"];
+            var connectionString = configuration["AzureStorage:ConnectionString"];
+            var tableName = configuration["AzureStorage:TableName"];
 
             if (string.IsNullOrEmpty(connectionString))
             {
@@ -267,16 +267,23 @@ namespace AIPromptManagementSystem.Services
         /// entities that match the query.</returns>
         public async Task<List<PromptUsageHistory>> SearchPromptAsync(string query)
         {
-            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(p => p.PromptTitle.Contains(query) || p.Description.Contains(query));
-            var searchResults = new List<PromptUsageHistory>();
+            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(
+                p => p.PartitionKey == "PromptVersionHistory");
+
+            var results = new List<PromptUsageHistory>();
 
             await foreach (var entity in _tableClient.QueryAsync<PromptUsageHistory>(filter))
             {
-                searchResults.Add(entity);
+                if (entity.PromptTitle.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    entity.Description.Contains(query, StringComparison.OrdinalIgnoreCase))
+                {
+                    results.Add(entity);
+                }
             }
 
-            return searchResults;
+            return results;
         }
+
 
         /// <summary>
         /// Retrieves PromptUsageHistory entities that match the specified category from table storage.
