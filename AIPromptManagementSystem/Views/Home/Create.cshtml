@@ -1,0 +1,55 @@
+﻿@model AIPromptManagementSystem.DTOs.CreatePromptDto
+
+@{
+    ViewData["Title"] = "Створити новий промпт";
+}
+
+<div class="container mt-4">
+    <h2 class="mb-3">Створення нового AI‑промпта</h2>
+
+    <form asp-action="Create" method="post" class="needs-validation" novalidate>
+        <div class="mb-3">
+            <label asp-for="Title" class="form-label"></label>
+            <input asp-for="Title" class="form-control" />
+            <span asp-validation-for="Title" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Description" class="form-label"></label>
+            <textarea asp-for="Description" class="form-control"></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="PromptText" class="form-label"></label>
+            <textarea asp-for="PromptText" class="form-control" rows="5"></textarea>
+            <span asp-validation-for="PromptText" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Category" class="form-label"></label>
+            <select asp-for="Category" class="form-select"
+                    asp-items="Html.GetEnumSelectList<AIPromptManagementSystem.Models.PromptCategoryEnum>()">
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="AITool" class="form-label"></label>
+            <input asp-for="AITool" class="form-control" />
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Author" class="form-label"></label>
+            <input asp-for="Author" class="form-control" />
+        </div>
+
+        <button type="submit" class="btn btn-primary">Створити</button>
+        <a asp-action="Index" class="btn btn-secondary ms-2">← Назад до списку</a>
+    </form>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+

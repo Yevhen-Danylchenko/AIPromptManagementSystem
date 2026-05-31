@@ -1,0 +1,40 @@
+﻿@model AIPromptManagementSystem.DTOs.CreatePromptVersionDto
+
+@{
+    ViewData["Title"] = "Створити нову версію промпта";
+}
+
+<div class="container mt-4">
+    <h2 class="mb-3">Створення нової версії AI‑промпта</h2>
+
+    <form asp-action="CreateVersion" method="post" class="needs-validation" novalidate>
+        <!-- PromptId приховано, щоб не редагувався вручну -->
+        <input type="hidden" asp-for="PromptId" />
+
+        <div class="mb-3">
+            <label asp-for="PromptText" class="form-label"></label>
+            <textarea asp-for="PromptText" class="form-control" rows="5"></textarea>
+            <span asp-validation-for="PromptText" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="ChangeNote" class="form-label">Примітка до змін</label>
+            <textarea asp-for="ChangeNote" class="form-control" rows="3"></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="CreatedBy" class="form-label">Автор змін</label>
+            <input asp-for="CreatedBy" class="form-control" />
+        </div>
+
+        <button type="submit" class="btn btn-success">Створити версію</button>
+        <a asp-action="Index" class="btn btn-secondary ms-2">← Назад до списку</a>
+    </form>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+

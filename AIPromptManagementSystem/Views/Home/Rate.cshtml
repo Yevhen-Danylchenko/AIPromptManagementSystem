@@ -1,0 +1,51 @@
+﻿@model AIPromptManagementSystem.Models.PromptUsageHistory
+
+@{
+    ViewData["Title"] = "Оцінити промпт";
+}
+
+<div class="container mt-4">
+    <h2 class="mb-3">Оцінка AI‑промпта</h2>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h4 class="card-title">@Model.PromptTitle</h4>
+            <p class="card-text"><strong>Автор:</strong> @Model.UserName</p>
+            <p class="card-text"><strong>Категорія:</strong> @Model.Category</p>
+            <p class="card-text"><strong>Інструмент:</strong> @Model.AITool</p>
+            <p class="card-text"><strong>Текст промпта:</strong> @Model.PromptText</p>
+        </div>
+    </div>
+
+    <form asp-action="Rate" method="post" class="needs-validation" novalidate>
+        <input type="hidden" name="id" value="@Model.RowKey" />
+
+        <div class="mb-3">
+            <label for="rating" class="form-label">Оцінка (1–5)</label>
+            <select id="rating" name="rating" class="form-select">
+                <option value="">-- Виберіть оцінку --</option>
+                <option value="1">1 - Погано</option>
+                <option value="2">2 - Слабко</option>
+                <option value="3">3 - Нормально</option>
+                <option value="4">4 - Добре</option>
+                <option value="5">5 - Відмінно</option>
+            </select>
+            <span asp-validation-for="Rating" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label for="comment" class="form-label">Коментар (необов’язково)</label>
+            <textarea id="comment" name="comment" class="form-control" rows="3"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Зберегти оцінку</button>
+        <a asp-action="Details" asp-route-id="@Model.RowKey" class="btn btn-secondary ms-2">← Назад до деталей</a>
+    </form>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
+
