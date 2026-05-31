@@ -87,7 +87,7 @@ namespace AIPromptManagementSystem.Controllers
         /// <param name="promptId"></param>
         /// <returns></returns>
         [HttpGet]
-        public async Task<IActionResult> CreateNewVersion(string promptId)
+        public async Task<IActionResult> CreateVersion(string promptId)
         {
             var model = new CreatePromptVersionDto
             {
@@ -105,7 +105,7 @@ namespace AIPromptManagementSystem.Controllers
         /// <param name="model"></param>
         /// <returns></returns>
         [HttpPost]
-        public async Task<IActionResult> CreateNewVersion(CreatePromptVersionDto model)
+        public async Task<IActionResult> CreateVersion(CreatePromptVersionDto model)
         {
             if (ModelState.IsValid)
             {
