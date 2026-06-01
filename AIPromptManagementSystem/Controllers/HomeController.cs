@@ -27,7 +27,7 @@ namespace AIPromptManagementSystem.Controllers
             {
                 Id = p.RowKey,
                 Title = p.PromptTitle,
-                Category = p.Category,
+                Category = Enum.Parse<PromptCategoryEnum>(p.Category),
                 AITool = p.AITool,
                 Author = p.UserName,
                 AverageRating = p.AverageRating,
@@ -116,9 +116,7 @@ namespace AIPromptManagementSystem.Controllers
         }
 
         /// <summary>
-        /// Displays the form for rating an AI prompt. Retrieves the prompt 
-        /// details based on the provided ID and passes it to the view. 
-        /// If the prompt is not found, returns a 404 Not Found response.
+        /// Displays the form for rating an AI prompt based on the provided ID.
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
@@ -126,10 +124,6 @@ namespace AIPromptManagementSystem.Controllers
         public async Task<IActionResult> Rate(string id)
         {
             var prompt = await _azureTableService.GetPromptByIdAsync(id);
-            if (prompt == null)
-            {
-                return NotFound();
-            }
             return View(prompt);
         }
 

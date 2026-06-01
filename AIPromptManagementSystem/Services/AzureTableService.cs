@@ -1,5 +1,6 @@
 ﻿using AIPromptManagementSystem.DTOs;
 using AIPromptManagementSystem.Models;
+using Azure;
 using Azure.Data.Tables;
 
 namespace AIPromptManagementSystem.Services
@@ -85,7 +86,7 @@ namespace AIPromptManagementSystem.Services
                 PromptTitle = obj.Title,
                 Description = obj.Description,
                 PromptText = obj.PromptText,
-                Category = obj.Category,
+                Category = obj.Category.ToString(),
                 AITool = obj.AITool,
                 UserName = obj.Author,
                 UsedAt = DateTime.UtcNow
@@ -94,24 +95,35 @@ namespace AIPromptManagementSystem.Services
         }
 
         /// <summary>
-        /// Adds a new version of an existing prompt to table 
-        /// storage asynchronously based on the provided CreatePromptVersionDto.  
+        /// Asynchronously adds a new version of a prompt to table 
+        /// storage based on the provided CreatePromptVersionDto. The method 
+        /// first checks for the existence of a base prompt with the specified PromptId, 
+        /// then retrieves all existing versions to determine the next version number 
+        /// and calculate the average rating. Finally, it creates and persists a 
+        /// new PromptUsageHistory entity representing the new version. Exceptions are 
+        /// thrown if the base prompt does not exist or if there are issues with table 
+        /// storage operations. 
         /// </summary>
         /// <param name="obj"></param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
         public async Task<PromptUsageHistory> AddNewVersionPromptAsync(CreatePromptVersionDto obj)
         {
-            // Перевіряємо, чи існує базовий промпт (щоб не створювати версію для неіснуючого)
-            var existingEntity = await _tableClient.GetEntityAsync<PromptUsageHistory>("PromptBase", obj.PromptId);
+            // Перевіряємо, чи існує базовий промпт
+            var filterBase = TableClient.CreateQueryFilter<PromptUsageHistory>(
+                p => p.PartitionKey == "PromptBase" && p.PromptId == obj.PromptId
+            );
 
-            if (existingEntity == null || existingEntity.Value == null)
+            var existingEntity = await _tableClient.QueryAsync<PromptUsageHistory>(filterBase).FirstOrDefaultAsync();
+            if (existingEntity == null)
             {
                 throw new InvalidOperationException($"No base entity found with PromptId: {obj.PromptId}");
             }
 
             // Витягуємо всі версії для цього PromptId
-            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(p => p.PartitionKey == "PromptVersionHistory" && p.PromptId == obj.PromptId);
+            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(
+                p => p.PartitionKey == "PromptVersionHistory" && p.PromptId == obj.PromptId
+            );
 
             int maxVersion = 0;
             var ratings = new List<int>();
@@ -119,26 +131,21 @@ namespace AIPromptManagementSystem.Services
             await foreach (var entity in _tableClient.QueryAsync<PromptUsageHistory>(filter))
             {
                 if (entity.Version > maxVersion)
-                {
                     maxVersion = entity.Version;
-                }
 
-                if (entity.Rating > 0)
-                {
+                if ((int)entity.Rating > 0)
                     ratings.Add((int)entity.Rating);
-                }
-                    
             }
 
             double averageRating = ratings.Count > 0 ? ratings.Average() : 0.0;
 
-            // Створюємо нову версію з новим RowKey
+            // Створюємо нову версію
             var newPromptVersion = new PromptUsageHistory
             {
                 PartitionKey = "PromptVersionHistory",
-                RowKey = Guid.NewGuid().ToString(), // новий унікальний ключ
+                RowKey = Guid.NewGuid().ToString(),
                 PromptId = obj.PromptId,
-                PromptTitle = $"Version of {obj.PromptId}, created by {obj.CreatedBy}",
+                PromptTitle = existingEntity.PromptTitle, 
                 Description = obj.ChangeNote,
                 UserName = obj.CreatedBy,
                 UsedAt = DateTime.UtcNow,
@@ -146,7 +153,6 @@ namespace AIPromptManagementSystem.Services
                 AverageRating = averageRating
             };
 
-            // Додаємо новий запис у таблицю
             await _tableClient.AddEntityAsync(newPromptVersion);
             return newPromptVersion;
         }
@@ -208,74 +214,72 @@ namespace AIPromptManagementSystem.Services
             return result.OrderByDescending(h => h.UsedAt).ToList();
         }
 
-
         /// <summary>
-        /// Retrieves details for the specified prompt, including the most recent usage record and the average of
-        /// recorded ratings.
+        /// Asynchronously retrieves detailed information about a 
+        /// specific prompt usage history entry by its unique identifier (id) 
+        /// from table storage. The method attempts to fetch the entity with 
+        /// the given id, and if found, maps its properties to a PromptDetailsDto 
+        /// object which is then returned. If no entity is found with the specified id, 
+        /// the method returns null. Exceptions from the table client are handled 
+        /// to return null in case of a 404 Not Found status, while other exceptions 
+        /// will propagate to the caller.
         /// </summary>
-        /// <remarks>AverageRating is 0.0 when there are no positive ratings. CreatedAt is taken from the
-        /// latest usage record's UsedAt; UpdatedAt is taken from the entity Timestamp or defaults to UTC now. The
-        /// method queries the configured table client and iterates all matching usage records to determine the latest
-        /// entry and aggregate ratings.</remarks>
-        /// <param name="promptId">Unique identifier of the prompt to retrieve.</param>
-        /// <returns>A PromptDetailsDto with Id, Title, Description, Author, AverageRating, CreatedAt, and UpdatedAt populated,
-        /// or null if no usage history exists for the specified prompt.</returns>
-        public async Task<PromptDetailsDto?> PromptDetailsAsync(string promptId)
+        /// <param name="id"></param>
+        /// <returns></returns>
+        public async Task<PromptDetailsDto?> PromptDetailsAsync(string id)
         {
-            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(p => p.PromptId == promptId);
-
-            var ratings = new List<int>();
-            PromptUsageHistory? latestEntity = null;
-
-            await foreach (var entity in _tableClient.QueryAsync<PromptUsageHistory>(filter))
+            try
             {
-                // зберігаємо останній запис (наприклад, за часом використання)
-                if (latestEntity == null || entity.UsedAt > latestEntity.UsedAt)
-                {
-                    latestEntity = entity;
-                }
+                var response = await _tableClient.GetEntityAsync<PromptUsageHistory>("PromptUsageHistory", id);
+                var entity = response.Value;
 
-                // збираємо всі рейтинги
-                if (entity.Rating > 0)
+                // Мапимо сутність у DTO
+                var dto = new PromptDetailsDto
                 {
-                    ratings.Add((int)entity.Rating);
-                }
+                    Id = entity.RowKey,
+                    Title = entity.PromptTitle,
+                    Description = entity.Description,
+                    CurrentText = entity.PromptText,
+                    Category = entity.Category,
+                    AITool = entity.AITool,
+                    Author = entity.UserName,
+                    Rating = entity.Rating,
+                    AverageRating = entity.AverageRating,
+                    CurrentVersion = entity.Version,
+                    CreatedAt = entity.UsedAt,
+                    UpdatedAt = entity.Timestamp?.UtcDateTime ?? DateTime.UtcNow
+                };
+
+                return dto;
             }
-
-            if (latestEntity == null)
-                return null;
-
-            return new PromptDetailsDto
+            catch (RequestFailedException ex) when (ex.Status == 404)
             {
-                Id = latestEntity.RowKey,
-                Title = latestEntity.PromptTitle,
-                Description = latestEntity.Description,
-                Author = latestEntity.UserName,
-                AverageRating = ratings.Count > 0 ? ratings.Average() : 0.0,
-                CreatedAt = latestEntity.UsedAt,
-                UpdatedAt = latestEntity.Timestamp?.DateTime ?? DateTime.UtcNow
-            };
+                return null;
+            }
         }
 
         /// <summary>
-        /// Searches prompt usage history entries whose PromptTitle or Description contains the specified query.
+        /// Searches for PromptUsageHistory entries where the 
+        /// PromptTitle or Description contains the specified query string.
         /// </summary>
-        /// <remarks>Performs a server-side table query via TableClient and materializes all matching
-        /// entities into a List.</remarks>
-        /// <param name="query">The search text to match against PromptTitle and Description.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains a list of PromptUsageHistory
-        /// entities that match the query.</returns>
+        /// <param name="query"></param>
+        /// <returns></returns>
         public async Task<List<PromptUsageHistory>> SearchPromptAsync(string query)
         {
+            // Фільтруємо лише по PartitionKey на сервері
             var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(
-                p => p.PartitionKey == "PromptVersionHistory");
+                p => p.PartitionKey == "PromptVersionHistory"
+            );
 
             var results = new List<PromptUsageHistory>();
 
             await foreach (var entity in _tableClient.QueryAsync<PromptUsageHistory>(filter))
             {
-                if (entity.PromptTitle.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    entity.Description.Contains(query, StringComparison.OrdinalIgnoreCase))
+                // Перевірка на клієнті: пошук по частині слова в Title або Description
+                if ((!string.IsNullOrEmpty(entity.PromptTitle) &&
+                     entity.PromptTitle.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(entity.Description) &&
+                     entity.Description.Contains(query, StringComparison.OrdinalIgnoreCase)))
                 {
                     results.Add(entity);
                 }
@@ -283,7 +287,6 @@ namespace AIPromptManagementSystem.Services
 
             return results;
         }
-
 
         /// <summary>
         /// Retrieves PromptUsageHistory entities that match the specified category from table storage.
@@ -295,7 +298,7 @@ namespace AIPromptManagementSystem.Services
         /// entities that match the specified category.</returns>
         public async Task<List<PromptUsageHistory>> FilterByCategoryAsync(PromptCategoryEnum category)
         {
-            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(p => p.Category == category);
+            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(p => p.Category == category.ToString());
 
             var results = new List<PromptUsageHistory>();
 
@@ -343,6 +346,23 @@ namespace AIPromptManagementSystem.Services
                 results.Add(entity);
             }
             return results.OrderByDescending(e => e.Rating).ToList();
+        }
+
+        /// <summary>
+        /// Searches for PromptUsageHistory entries where the 
+        /// PromptTitle contains the specified title fragment.
+        /// </summary>
+        /// <param name="title"></param>
+        /// <returns></returns>
+        public async Task<List<PromptUsageHistory>> SearchForTitle(string title)
+        {
+            var filter = TableClient.CreateQueryFilter<PromptUsageHistory>(p => p.PromptTitle.Contains(title));
+            var results = new List<PromptUsageHistory>();
+            await foreach (var entity in _tableClient.QueryAsync<PromptUsageHistory>(filter))
+            {
+                results.Add(entity);
+            }
+            return results;
         }
     }
 }
