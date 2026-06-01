@@ -1,4 +1,4 @@
-﻿@model AIPromptManagementSystem.Models.PromptUsageHistory
+﻿@model AIPromptManagementSystem.DTOs.RatePromptDto
 
 @{
     ViewData["Title"] = "Оцінити промпт";
@@ -7,22 +7,18 @@
 <div class="container mt-4">
     <h2 class="mb-3">Оцінка AI‑промпта</h2>
 
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <h4 class="card-title">@Model.PromptTitle</h4>
-            <p class="card-text"><strong>Автор:</strong> @Model.UserName</p>
-            <p class="card-text"><strong>Категорія:</strong> @Model.Category</p>
-            <p class="card-text"><strong>Інструмент:</strong> @Model.AITool</p>
-            <p class="card-text"><strong>Текст промпта:</strong> @Model.PromptText</p>
-        </div>
-    </div>
-
     <form asp-action="Rate" method="post" class="needs-validation" novalidate>
-        <input type="hidden" name="id" value="@Model.RowKey" />
+        <input type="hidden" asp-for="PromptId" />
 
         <div class="mb-3">
-            <label for="rating" class="form-label">Оцінка (1–5)</label>
-            <select id="rating" name="rating" class="form-select">
+            <label asp-for="UserName" class="form-label">Ваше ім’я</label>
+            <input asp-for="UserName" class="form-control" />
+            <span asp-validation-for="UserName" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Rating" class="form-label">Оцінка (1–5)</label>
+            <select asp-for="Rating" class="form-select">
                 <option value="">-- Виберіть оцінку --</option>
                 <option value="1">1 - Погано</option>
                 <option value="2">2 - Слабко</option>
@@ -34,12 +30,12 @@
         </div>
 
         <div class="mb-3">
-            <label for="comment" class="form-label">Коментар (необов’язково)</label>
-            <textarea id="comment" name="comment" class="form-control" rows="3"></textarea>
+            <label asp-for="Comment" class="form-label">Коментар (необов’язково)</label>
+            <textarea asp-for="Comment" class="form-control" rows="3"></textarea>
         </div>
 
         <button type="submit" class="btn btn-primary">Зберегти оцінку</button>
-        <a asp-action="Details" asp-route-id="@Model.RowKey" class="btn btn-secondary ms-2">← Назад до деталей</a>
+        <a asp-action="Details" asp-route-id="@Model.PromptId" class="btn btn-secondary ms-2">← Назад до деталей</a>
     </form>
 </div>
 
@@ -48,4 +44,7 @@
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
 }
+
+
+
 

@@ -1,5 +1,6 @@
-﻿using Azure.Data.Tables;
-using Azure;
+﻿using Azure;
+using Azure.Data.Tables;
+using System.Runtime.Serialization;
 
 namespace AIPromptManagementSystem.Models
 {
@@ -21,7 +22,23 @@ namespace AIPromptManagementSystem.Models
         public double AverageRating { get; set; }
         public string Comment { get; set; } = string.Empty;
         public string AITool { get; set; } = string.Empty;
-        public PromptCategoryEnum Category { get; set; } = PromptCategoryEnum.CodeGeneration;
+        //public PromptCategoryEnum Category { get; set; } = PromptCategoryEnum.CodeGeneration;
+        //public string Category
+        //{
+        //    get => CategoryValue.ToString();
+        //    set => CategoryValue = Enum.Parse<PromptCategoryEnum>(value);
+        //}
+
+        // Це поле реально зберігається в Azure Table Storage
+        public string Category { get; set; } = PromptCategoryEnum.CodeGeneration.ToString();
+
+        // Це зручна обгортка для роботи з enum у коді
+        [IgnoreDataMember] // щоб не дублювати в таблиці
+        public PromptCategoryEnum CategoryValue
+        {
+            get => Enum.Parse<PromptCategoryEnum>(Category);
+            set => Category = value.ToString();
+        }
         public DateTime UsedAt { get; set; } = DateTime.UtcNow;
     }
 }

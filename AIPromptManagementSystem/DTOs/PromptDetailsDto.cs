@@ -8,7 +8,7 @@ namespace AIPromptManagementSystem.DTOs
         public string Title { get; set; }
         public string Description { get; set; } = string.Empty;
         public string CurrentText { get; set; } = string.Empty;
-        public PromptCategoryEnum Category { get; set; } = PromptCategoryEnum.CodeGeneration;
+        public string Category { get; set; } = string.Empty;
         public string AITool { get; set; } = string.Empty;
         public string Author { get; set; } = string.Empty;
         public PromptRatingEnum Rating { get; set; } = PromptRatingEnum.Погано;

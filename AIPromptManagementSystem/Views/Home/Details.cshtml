@@ -46,6 +46,8 @@
 
     <div class="mt-3">
         <a asp-action="Index" class="btn btn-secondary">← Назад до списку</a>
+        <a asp-action="Rate" asp-route-id="@Model.Id" class="btn btn-warning ms-2">Оцінити промпт</a>
+        <a asp-action="CreateVersion" asp-route-id="@Model.Id" class="btn btn-success ms-2">Створити нову версію</a>
     </div>
 </div>
 
